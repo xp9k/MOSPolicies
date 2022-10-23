@@ -1,0 +1,5 @@
+/dist
+/actions
+.gitattributes
+ui_mainform.py
+ui_editdialog.py
