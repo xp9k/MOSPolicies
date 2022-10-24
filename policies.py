@@ -5,10 +5,11 @@ from PyQt6.QtWidgets import (
     QApplication, QDialog, QMainWindow
 )
 import xml.etree.ElementTree as xml
-from xml.dom import minidom
 from ui_mainform import Ui_MainWindow
 from ui_editdialog import Ui_Dialog
 
+
+ns = r"{http://www.w3.org/XML/1998/namespace}lang"
 
 if platform.system() == "Linux":
     PoliciesDir = "/usr/share/polkit-1/actions/"
@@ -30,43 +31,40 @@ def read_xml(filename: str) -> bool:
     global actions
     actions = []
     try:
-        xmldoc = minidom.parse(filename)
-        actionslist = xmldoc.getElementsByTagName('action')
+        xmldoc = xml.parse(filename)
+        root = xmldoc.getroot()
+        actionslist = root.findall('.//action')
         for action in actionslist:
             act = {}
-            act['id'] = action.attributes['id'].value
+            act['id'] = action.get('id')
             act['descriptions'] = {}
-            for description in action.getElementsByTagName('description'):            
-                if 'xml:lang' in description.attributes: 
-                    if description.firstChild is not None:
-                        act['descriptions'][description.attributes['xml:lang'].value] = description.firstChild.nodeValue or ''
-                    else:
-                        act['descriptions'][description.attributes['xml:lang'].value] = ''
+            for description in action.findall('.//description'):    
+                if ns in description.attrib:
+                    act['descriptions'][description.get(ns)] = description.text
                 else:
-                    act['descriptions']['default'] = description.firstChild.nodeValue or ''
+                    act['descriptions']['default'] = description.text                      
+                    
             act['messages'] = {}             
-            for message in action.getElementsByTagName('message'):            
-                if 'xml:lang' in message.attributes:
-                    if message.firstChild is not None:
-                        act['messages'][message.attributes['xml:lang'].value] = message.firstChild.nodeValue
-                    else:
-                        act['messages'][message.attributes['xml:lang'].value] = ''
+            for message in action.findall('.//message'):          
+                if ns in message.attrib:
+                    act['messages'][message.get(ns)] = message.text
                 else:
-                    act['messages']['default'] = message.firstChild.nodeValue
-            tmp = action.getElementsByTagName('allow_active')
-            for row in tmp:
-                    act['allow_active'] = row.firstChild.nodeValue
-            tmp = action.getElementsByTagName('allow_inactive')
-            for row in tmp:
-                act['allow_inactive'] = row.firstChild.nodeValue
-            tmp = action.getElementsByTagName('allow_any')
-            for row in tmp:
-                    if row.firstChild is not None:
-                        act['allow_any'] = row.firstChild.nodeValue
+                    act['messages']['default'] = message.text
+
+            tmp = action.find('.//defaults/allow_active')
+            act['allow_active'] = tmp.text
+            tmp = action.find('.//defaults/allow_inactive')
+            act['allow_inactive'] = tmp.text
+            tmp = action.find('.//defaults/allow_any')
+            if tmp is not None:
+                act['allow_any'] = tmp.text
             actions.append(act)
-    except:
+
+    except Exception as e:
+        print(e.args)
         return False
     return True
+
 
 
 def write_xml(filename: str, id: str, data: Dict) -> bool:
@@ -140,7 +138,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         cb_index = frmEdit.cbInactive.findText(actions[index].get('allow_inactive'))
         if index != -1:
             frmEdit.cbInactive.setCurrentIndex(cb_index)
-        cb_index = frmEdit.cbAny.findText(actions[index].get('allow_any'))
+        cb_index = frmEdit.cbAny.findText(actions[index].get('allow_any', ''))
         if index != -1:
             frmEdit.cbAny.setCurrentIndex(cb_index)
 
